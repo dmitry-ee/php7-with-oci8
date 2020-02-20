@@ -1,4 +1,4 @@
-# Latest PHP 7.1 image with Apache and Oracle oci8 (instantclient 12.2.0.1.0)
+# Latest PHP 7.2 image with Apache and Oracle oci8 (instantclient 12.2.0.1.0)
 
 This image is built from [official PHP images](https://hub.docker.com/_/php/). It ads oci8 drivers to official image to connect to Oracle database.
 
