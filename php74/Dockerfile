@@ -1,11 +1,4 @@
-FROM php:7.2-apache
-
-ARG INSTANTCLIENT_VER="12.2.0.1.0"
-ARG SSH2_VER="1.1.2"
-ARG PECL_HTTP_VER="3.2.3"
-ARG RAPHF_VER="2.0.1"
-ARG PROPRO_VER="2.1.0"
-ARG SQLSRV_VER="5.8.0"
+FROM php:7.4-apache
 
 RUN apt-get update && apt-get install -y \
         unzip \
@@ -13,6 +6,7 @@ RUN apt-get update && apt-get install -y \
         libjpeg62-turbo-dev \
         libpng-dev \
         libaio1 \
+        libonig-dev \
         # for ssh2
         libssh2-1-dev \
         # pecl_httl / curl
@@ -24,12 +18,21 @@ RUN apt-get update && apt-get install -y \
         libldap2-dev \
         # sqlsrv
         unixodbc-dev \
+        # memcached
+        libmemcached-dev \
     && docker-php-ext-install -j$(nproc) iconv gettext iconv mbstring soap \
-    && docker-php-ext-configure gd --with-freetype-dir=/usr/include/ --with-jpeg-dir=/usr/include/ \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j$(nproc) gd \
     && docker-php-ext-configure ldap --with-libdir=lib/x86_64-linux-gnu/ \
     && docker-php-ext-install -j$(nproc) ldap
 
+ARG INSTANTCLIENT_VER="12.2.0.1.0"
+ARG SSH2_VER="1.2"
+ARG PECL_HTTP_VER="3.2.3"
+ARG RAPHF_VER="2.0.1"
+ARG PROPRO_VER="2.1.0"
+ARG SQLSRV_VER="5.8.0"
+ARG MEMCACHED_VER="3.1.5"
 
 COPY docker-php.conf /etc/apache2/conf-enabled/docker-php.conf
 
@@ -64,6 +67,8 @@ RUN unzip /tmp/instantclient-basiclite-linux.x64-${INSTANTCLIENT_VER}.zip -d /us
     pecl install pecl_http-${PECL_HTTP_VER} && echo "extension=http.so" > /usr/local/etc/php/conf.d/php-http.ini && \
     # sqlsrv
     pecl install pdo_sqlsrv-${SQLSRV_VER} && echo "extension=pdo_sqlsrv.so" > /usr/local/etc/php/conf.d/php-sqlsrv.ini && \
+    # memcached
+    pecl install memcached-${MEMCACHED_VER} && echo "extension=memcached.so" > /usr/local/etc/php/conf.d/php-memcached.ini && \
     # ###
     rm -rf /tmp/*
 
