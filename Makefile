@@ -25,13 +25,13 @@ build: prepare build-cache
 build-clean: prepare build-no-cache
 
 build-cache:
-	docker build -t $(DOCKER_ID_USER)/$(APP_NAME):$(APP_VERSION) --build-arg INSTANTCLIENT_VER=$(INSTANTCLIENT_VER) $(BUILD_DIR)
+	docker build --squash -t $(DOCKER_ID_USER)/$(APP_NAME):$(APP_VERSION) --build-arg INSTANTCLIENT_VER=$(INSTANTCLIENT_VER) $(BUILD_DIR)
 
 build-no-cache:
 	docker build --squash --no-cache -t $(DOCKER_ID_USER)/$(APP_NAME):$(APP_VERSION) --build-arg INSTANTCLIENT_VER=$(INSTANTCLIENT_VER) $(BUILD_DIR)
 
 run:
-	docker run -d -p 8000:80 --rm --name $(APP_NAME) $(DOCKER_ID_USER)/$(APP_NAME):$(APP_VERSION)
+	docker run -d -p 8000:80 -p 8001:81 --rm --name $(APP_NAME) $(DOCKER_ID_USER)/$(APP_NAME):$(APP_VERSION)
 bash:
 	docker exec -it $(APP_NAME) bash
 rm:

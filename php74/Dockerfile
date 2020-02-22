@@ -20,11 +20,13 @@ RUN apt-get update && apt-get install -y \
         unixodbc-dev \
         # memcached
         libmemcached-dev \
+        vim \
     && docker-php-ext-install -j$(nproc) iconv gettext iconv mbstring soap \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j$(nproc) gd \
     && docker-php-ext-configure ldap --with-libdir=lib/x86_64-linux-gnu/ \
-    && docker-php-ext-install -j$(nproc) ldap
+    && docker-php-ext-install -j$(nproc) ldap \
+    && apt -y autoremove && apt clean && rm -rf /var/lib/apt/lists/*
 
 ARG INSTANTCLIENT_VER="12.2.0.1.0"
 ARG SSH2_VER="1.2"
@@ -72,6 +74,31 @@ RUN unzip /tmp/instantclient-basiclite-linux.x64-${INSTANTCLIENT_VER}.zip -d /us
     # ###
     rm -rf /tmp/*
 
-RUN echo "<?php echo phpinfo(); ?>" > /var/www/html/phpinfo.php
+# build freakin mod_auth_ntlm_winbind
+# https://www.samba.org//ftp/unpacked/lorikeet/mod_auth_ntlm_winbind/
+# https://hemakhema.blogspot.com/2017/07/enable-sso-login-in-linux.html
+# https://docs.moodle.org/38/en/NTLM_authentication
+RUN apt update && apt install -y apache2-dev && \
+    cd /tmp && \
+    curl -XGET https://github.com/dmitry-ee/mod_auth_ntlm_winbind-/archive/master.zip -L -o mod_auth_ntlm_winbind.zip && \
+    unzip mod_auth_ntlm_winbind.zip && \
+    cd mod_auth_ntlm_winbind--master && \
+    apxs -DAPACHE2 -c -i mod_auth_ntlm_winbind.c && \
+    rm -rf /tmp/* && \
+    apt purge -y apache2-dev && \
+    apt install -y winbind && \
+    apt -y autoremove && apt clean && rm -rf /var/lib/apt/lists/*
 
-EXPOSE 80
+COPY php-ntlm.conf /etc/apache2/conf-available/php-ntlm.conf
+COPY 001-ntlm.conf /etc/apache2/sites-available/001-ntlm.conf
+COPY ports.conf /etc/apache2/ports.conf
+
+RUN mkdir /var/www/ntlm && \
+    a2enconf php-ntlm && \
+    a2ensite 001-ntlm && \
+    chown -R www-data:www-data /var/www/ntlm && \
+    service apache2 restart && \
+    echo "<?php echo phpinfo(); ?>" > /var/www/html/phpinfo.php && \
+    echo "<?php print_r($_SERVER); ?>" > /var/www/ntlm/server.php
+
+EXPOSE 80 81
