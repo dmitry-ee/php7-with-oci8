@@ -1,6 +1,6 @@
 FROM php:7.4-apache
 
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends -y \
         unzip \
         libfreetype6-dev \
         libjpeg62-turbo-dev \
@@ -25,8 +25,21 @@ RUN apt-get update && apt-get install -y \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j$(nproc) gd \
     && docker-php-ext-configure ldap --with-libdir=lib/x86_64-linux-gnu/ \
-    && docker-php-ext-install -j$(nproc) ldap \
-    && apt -y autoremove && apt clean && rm -rf /var/lib/apt/lists/*
+    && docker-php-ext-install -j$(nproc) ldap && \
+    # MSSQL ODBC SETUP
+    apt install -y gnupg2 --no-install-recommends && \
+    curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - && \
+    curl https://packages.microsoft.com/config/debian/10/prod.list > /etc/apt/sources.list.d/mssql-release.list && \
+    apt update && \
+    env ACCEPT_EULA=Y apt-get install -y msodbcsql17 && \
+    apt purge -y gnupg2 && \
+    # MSSQL ODBC FIX FOR SQL SERVER2008
+    # See: https://github.com/microsoft/msphpsql/issues/1056
+    apt-get install -y --no-install-recommends openssl && \
+    sed -i 's,^\(MinProtocol[ ]*=\).*,\1'TLSv1.0',g' /etc/ssl/openssl.cnf && \
+    sed -i 's,^\(CipherString[ ]*=\).*,\1'DEFAULT@SECLEVEL=1',g' /etc/ssl/openssl.cnf && \
+    # CLEANUP
+    apt -y autoremove && apt clean && rm -rf /var/lib/apt/lists/*
 
 ARG INSTANTCLIENT_VER="12.2.0.1.0"
 ARG SSH2_VER="1.2"
@@ -68,37 +81,16 @@ RUN unzip /tmp/instantclient-basiclite-linux.x64-${INSTANTCLIENT_VER}.zip -d /us
     # pecl_http
     pecl install pecl_http-${PECL_HTTP_VER} && echo "extension=http.so" > /usr/local/etc/php/conf.d/php-http.ini && \
     # sqlsrv
-    pecl install pdo_sqlsrv-${SQLSRV_VER} && echo "extension=pdo_sqlsrv.so" > /usr/local/etc/php/conf.d/php-sqlsrv.ini && \
+    pecl install sqlsrv-${SQLSRV_VER}     && echo "extension=sqlsrv.so"     > /usr/local/etc/php/conf.d/php-sqlsrv.ini && \
+    pecl install pdo_sqlsrv-${SQLSRV_VER} && echo "extension=pdo_sqlsrv.so" >> /usr/local/etc/php/conf.d/php-sqlsrv.ini && \
     # memcached
     pecl install memcached-${MEMCACHED_VER} && echo "extension=memcached.so" > /usr/local/etc/php/conf.d/php-memcached.ini && \
     # ###
     rm -rf /tmp/*
 
-# build freakin mod_auth_ntlm_winbind
-# https://www.samba.org//ftp/unpacked/lorikeet/mod_auth_ntlm_winbind/
-# https://hemakhema.blogspot.com/2017/07/enable-sso-login-in-linux.html
-# https://docs.moodle.org/38/en/NTLM_authentication
-RUN apt update && apt install -y apache2-dev && \
-    cd /tmp && \
-    curl -XGET https://github.com/dmitry-ee/mod_auth_ntlm_winbind-/archive/master.zip -L -o mod_auth_ntlm_winbind.zip && \
-    unzip mod_auth_ntlm_winbind.zip && \
-    cd mod_auth_ntlm_winbind--master && \
-    apxs -DAPACHE2 -c -i mod_auth_ntlm_winbind.c && \
-    rm -rf /tmp/* && \
-    apt purge -y apache2-dev && \
-    apt install -y winbind && \
-    apt -y autoremove && apt clean && rm -rf /var/lib/apt/lists/*
-
-COPY php-ntlm.conf /etc/apache2/conf-available/php-ntlm.conf
-COPY 001-ntlm.conf /etc/apache2/sites-available/001-ntlm.conf
 COPY ports.conf /etc/apache2/ports.conf
+COPY php-default.ini /usr/local/etc/php/conf.d/
 
-RUN mkdir /var/www/ntlm && \
-    a2enconf php-ntlm && \
-    a2ensite 001-ntlm && \
-    chown -R www-data:www-data /var/www/ntlm && \
-    service apache2 restart && \
-    echo "<?php echo phpinfo(); ?>" > /var/www/html/phpinfo.php && \
-    echo "<?php print_r($_SERVER); ?>" > /var/www/ntlm/server.php
+RUN echo "<?php echo phpinfo(); ?>" > /var/www/html/phpinfo.php
 
 EXPOSE 80 81
